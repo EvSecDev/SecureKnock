@@ -90,6 +90,13 @@ func validateActionCommands(actions []map[string][]string) (err error) {
 // Quick checks to confirm data payload from packet is roughly valid
 // checks for empty payload, and size is within expected bounds
 func validatePacket(packet gopacket.Packet) (payload []byte, err error) {
+	// Recover from panic
+	defer func() {
+		if r := recover(); r != nil {
+			logError("panic while validating received packet", fmt.Errorf("%v", r), true, true)
+		}
+	}()
+
 	// Get only transport layer payload of received packet
 	packeyTransportLayer := packet.TransportLayer()
 

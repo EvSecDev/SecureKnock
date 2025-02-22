@@ -85,6 +85,13 @@ func prepareEncryption(keyAndIV string) (AESGCMCipherBlock cipher.AEAD, TOTPSecr
 // This adds a time factor to mutate an IV that normally provides altered cipher text per encrypted payload
 // With a shared secret, this creates time-based authentication
 func MutateIVwithTime(TOTPSecret []byte) []byte {
+	// Recover from panic
+	defer func() {
+		if r := recover(); r != nil {
+			logError("panic while mutating encryption IV", fmt.Errorf("%v", r), false, true)
+		}
+	}()
+
 	// Get current time
 	currentUTCTime := time.Now().UTC()
 

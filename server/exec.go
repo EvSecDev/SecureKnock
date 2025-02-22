@@ -37,6 +37,14 @@ func runCommands(commands []string, sudoPassword string) (err error) {
 		// Prepare command struct
 		cmd := exec.Command(commandExe, commandArgs[1:]...)
 
+		// Prepare stderr
+		var stderr io.ReadCloser
+		stderr, err = cmd.StderrPipe()
+		if err != nil {
+			err = fmt.Errorf("failed to create stderr writer: %v", err)
+			return
+		}
+
 		// Prepare stdin for sudo password (might be empty)
 		var stdin io.WriteCloser
 		stdin, err = cmd.StdinPipe()
@@ -69,7 +77,18 @@ func runCommands(commands []string, sudoPassword string) (err error) {
 		// Wait for command to complete
 		err = cmd.Wait()
 		if err != nil {
-			err = fmt.Errorf("command failed: %v", err)
+			// Retrieve command stderr for details on the command failure
+			CommandStderr, lerr := io.ReadAll(stderr)
+			if lerr != nil {
+				err = fmt.Errorf("failed to retrieve command stderr: %v", lerr)
+				return
+			}
+
+			// Convert stderr to string
+			CommandError := string(CommandStderr)
+
+			// Log the full error details on why command failed
+			err = fmt.Errorf("command failed: %v: %s", err, CommandError)
 			return
 		}
 	}
