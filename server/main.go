@@ -18,26 +18,24 @@ type Config struct {
 }
 type PCAPFilter struct {
 	CaptureInterface string `json:"captureInterface"`
-	SourceIP         string `json:"sourceIP,omitempty"`
-	SourcePort       string `json:"sourcePort"`
-	DestinationIP    string `json:"destinationIP"`
-	DestinationPort  string `json:"destinationPort"`
+	IncludeFilter    string `json:"inclusionBPF"`
+	ExcludeFilter    string `json:"exclusionBPF,omitempty"`
 }
 
 // Reserved separator character for action name in payload
-const payloadSeparator = string(":")
+const payloadSeparator string = ":"
 
 // Min and max byte length for expected payload (assuming 1500 byte mtu)
-const minPayloadLengthB = int(10)
-const maxPayloadLengthB = int(1458)
+const minPayloadLengthB int = 10
+const maxPayloadLengthB int = 1458
 
 // Written to only in main
 var logFilePath string
 var sudoRequired bool
 
 // Program Meta Info
-const progVersion = string("v0.1.0")
-const logProgramName = string("SecurceKnockd")
+const progVersion string = "v0.2.0"
+const logProgramName string = "SecurceKnockd"
 const usage = `
 Options:
     -s, --start-server              Start server

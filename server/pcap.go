@@ -14,16 +14,16 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AESGCMC
 	// Recover from panic
 	defer func() {
 		if r := recover(); r != nil {
-			logError(fmt.Sprintf("panic while processing packets"), fmt.Errorf("%v", r), true, true)
+			logError("panic while processing packets", fmt.Errorf("%v", r), true, true)
 		}
 	}()
 
 	// Prepare filter
-	var captureFilter string
-	if filter.SourceIP == "" {
-		captureFilter = fmt.Sprintf("udp and src port %s and dst port %s and dst host %s", filter.SourcePort, filter.DestinationPort, filter.DestinationIP)
-	} else if filter.SourceIP != "" {
-		captureFilter = fmt.Sprintf("udp and src port %s and dst port %s and src host %s and dst host %s", filter.SourcePort, filter.DestinationPort, filter.SourceIP, filter.DestinationIP)
+	captureFilter := "udp and " + filter.IncludeFilter
+
+	// Add user defined BPF to capture filter
+	if len(filter.ExcludeFilter) > 0 {
+		captureFilter += fmt.Sprintf("(%s) and not (%s)", captureFilter, filter.ExcludeFilter)
 	}
 
 	// Open packet capture device
@@ -67,8 +67,11 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AESGCMC
 			continue
 		}
 
+		// Log received knock packet
+		log(fmt.Sprintf("Received knock packet (action:%s) from %s:%s", actionName, l3meta.Src(), l4meta.Src()))
+
 		// Run commands for the action
-		err = runCommands(actionName, commands, sudoPassword)
+		err = runCommands(commands, sudoPassword)
 		if err != nil {
 			logError(fmt.Sprintf("failed action command issued from %s:%s", l3meta.Src(), l4meta.Src()), err, false, true)
 			continue

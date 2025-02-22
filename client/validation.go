@@ -2,17 +2,45 @@
 package main
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"net"
 	"strings"
 )
 
 // Resolves domain names, ensures IP is a valid address
 // Joins IP and port, and creates a socket for use with net Dial
+// Does not check if port is destination or source, if destination is empty, it will generate a random destination port
 func validateIPandPort(address string, port int) (socket net.Addr, l4Protocol string, err error) {
+	// Generate random port if port is nil (0)
+	// Should only happen for source ports - function is guarded against random destination ports outside function
+	if port == 0 {
+		// Define port range
+		min := int64(1024)
+		max := int64(65535)
+
+		// Calculate number of ports in range
+		rangeSize := max - min + 1
+
+		// Get random port
+		var randomNumber *big.Int
+		randomNumber, err = rand.Int(rand.Reader, big.NewInt(rangeSize))
+		if err != nil {
+			err = fmt.Errorf("failed to generate random port number: %v", err)
+			return
+		}
+
+		// Adjust random into range
+		randomNumber = randomNumber.Add(randomNumber, big.NewInt(min))
+
+		// Save over existing source port
+		port = int(randomNumber.Int64())
+	}
+
 	// Reject empty IP and port
-	if address == "" || port == 0 {
-		err = fmt.Errorf("must specify address and port")
+	if address == "" {
+		err = fmt.Errorf("must specify address")
 		return
 	}
 

@@ -36,6 +36,6 @@ func sendPacket(payloadClearText string, AESGCMCipherBlock cipher.AEAD, TOTPSecr
 	}
 
 	// Show progress to user
-	fmt.Printf("Sent knock to %s\n", destinationSocket)
+	fmt.Printf("Sent knock from %s to %s\n", sourceSocket.String(), destinationSocket)
 	return
 }

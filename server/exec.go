@@ -9,11 +9,11 @@ import (
 )
 
 // Runs commands from config action array based on received packet action name
-func runCommands(actionName string, commands []string, sudoPassword string) (err error) {
+func runCommands(commands []string, sudoPassword string) (err error) {
 	// Recover from panic
 	defer func() {
 		if r := recover(); r != nil {
-			logError(fmt.Sprintf("panic while running action commands"), fmt.Errorf("%v", r), false, true)
+			logError("panic while running action commands", fmt.Errorf("%v", r), false, true)
 		}
 	}()
 
@@ -69,7 +69,7 @@ func runCommands(actionName string, commands []string, sudoPassword string) (err
 		// Wait for command to complete
 		err = cmd.Wait()
 		if err != nil {
-			fmt.Errorf("command failed: %v", err)
+			err = fmt.Errorf("command failed: %v", err)
 			return
 		}
 	}

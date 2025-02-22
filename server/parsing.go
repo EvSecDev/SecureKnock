@@ -14,7 +14,7 @@ func parsePayload(decryptedPayload []byte, actions []map[string][]string) (actio
 	// Recover from panic
 	defer func() {
 		if r := recover(); r != nil {
-			logError(fmt.Sprintf("panic while parsing packet payload"), fmt.Errorf("%v", r), false, true)
+			logError("panic while parsing packet payload", fmt.Errorf("%v", r), false, true)
 		}
 	}()
 

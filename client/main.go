@@ -10,21 +10,21 @@ import (
 )
 
 // Reserved separator character for action name in payload
-const payloadSeparator = string(":")
+const payloadSeparator string = ":"
 
 // Regex
-const payloadRegex = string("^[\x00-\x7F]*$")
-const encryptionKeyRegex = string("[0-9a-fA-F]+")
+const payloadRegex string = "^[\x00-\x7F]*$"
+const encryptionKeyRegex string = "[0-9a-fA-F]+"
 
 // Reserved max lengths for action name and password (500 byte/chars for each)
-const maxPayloadTextSize = int(500)
+const maxPayloadTextSize int = 500
 
 // Written to only in main
 var ASCIIRegEx *regexp.Regexp
 var HexRegEx *regexp.Regexp
 
 // Program Meta Info
-const progVersion = string("v0.1.0")
+const progVersion string = "v0.2.0"
 const usage = `
 Options:
     -k, --keyfile </path/to/keyfile>  Path to the encryption key file [default: priv.key]
@@ -98,6 +98,10 @@ func main() {
 		sourceSocket, l4Protocol, err := validateIPandPort(sourceAddress, sourcePort)
 		logError("invalid source", err)
 
+		// Catch empty destination port
+		if destinationPort == 0 {
+			logError("invalid destination", fmt.Errorf("destination port is not specified"))
+		}
 		// Validate destination
 		destinationSocket, l4Protocol, err := validateIPandPort(destinationAddress, destinationPort)
 		logError("invalid destination", err)

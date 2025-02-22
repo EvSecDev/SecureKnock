@@ -14,19 +14,20 @@ then
 fi
 
 #### Pre Checks
-set -e
 
 # Check for commands
-command -v echo >/dev/null 
-command -v tar >/dev/null 
-command -v sudo >/dev/null
-command -v mkdir >/dev/null
-command -v rm >/dev/null
-command -v tail >/dev/null
-command -v cat >/dev/null
-command -v base64 >/dev/null
-command -v passwd >/dev/null
-command -v systemctl >/dev/null 
+command -v echo
+command -v tar
+command -v sudo
+command -v mkdir
+command -v rm
+command -v tail
+command -v cat
+command -v base64
+command -v passwd
+command -v systemctl
+
+set -e
 
 #### Installation
 echo -e "\n========================================"
@@ -69,6 +70,8 @@ PAYLOAD_LINE=$(awk '/^__PAYLOAD_BEGINS__/ { print NR + 1; exit 0; }' $0)
 executableDirs=$(dirname $executablePath 2>/dev/null)
 mkdir -p $executableDirs 2>/dev/null
 tail -n +${PAYLOAD_LINE} $0 | base64 -d | tar -zpvx -C $executableDirs
+chown $RunAsUser:$RunAsUser $executablePath
+chmod 755 $executablePath
 echo "[+] Successfully extracted binary"
 
 # Run binary to create new key
@@ -83,10 +86,8 @@ cat > "$configFilePath" <<EOF
   "pcapFilter":
   {
     "captureInterface": "lo",
-    "sourceIP": "127.0.0.1",
-    "sourcePort": "3333",
-    "destinationIP": "127.0.0.1",
-    "destinationPort": "2222"
+    "inclusionBPF":"",
+    "exclusionBPF":""
   },
   "actions":
   [
@@ -100,7 +101,7 @@ chmod 640 $configFilePath
 echo "[+] Successfully installed config to $configFilePath"
 
 # Add Sudo Permissions
-if ! [[ $(egrep $RunAsUser /etc/sudoers) ]]
+if ! [[ $(grep -q $RunAsUser /etc/sudoers) ]]
 then
   cat > /etc/sudoers <<EOF
 
@@ -119,7 +120,7 @@ then
 ## Variables
 @{exelocation}=$executablePath
 @{configlocation}=$configFilePath
-
+@{logfilelocation}=$DaemonLogFile
 @{profilelocation}=/etc/apparmor.d/usr.local.bin.secureknockd
 @{pid}={[1-9],[1-9][0-9],[1-9][0-9][0-9],[1-9][0-9][0-9][0-9],[1-9][0-9][0-9][0-9][0-9],[1-9][0-9][0-9][0-9][0-9][0-9],[1-4][0-9][0-9][0-9][0-9][0-9][0-9]}
 
@@ -149,7 +150,7 @@ profile SecureKnockd @{exelocation} flags=(enforce) {
   @{configlocation} r,
 
   # Log accesses
-  owner /tmp/secureknockd.log rw,
+  owner @{logfilelocation} rw,
   /usr/local/go/lib/time/zoneinfo.zip r,
   /usr/share/zoneinfo/** r,
 
@@ -190,6 +191,7 @@ profile SecureKnockdSudo flags=(enforce) {
   network unix stream,
   network unix dgram,
   network inet dgram,
+  network inet6 dgram,
   network packet raw,
 
   # User defined commands for actions (change as needed)
@@ -243,6 +245,7 @@ profile SecureKnockdSudo flags=(enforce) {
   /etc/host.conf r,
   /etc/hosts r,
   /etc/resolv.conf r,
+  /etc/gai.conf r,
 
   # /dev accesses
   /dev/tty rw,
@@ -303,7 +306,6 @@ StartLimitBurst=6
 [Service]
 StandardOutput=journal
 StandardError=journal
-AmbientCapabilities=CAP_NET_RAW
 ExecStart=$executablePath --start-server --config $configFilePath
 User=$RunAsUser
 Group=$RunAsUser

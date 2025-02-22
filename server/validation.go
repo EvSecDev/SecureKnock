@@ -47,12 +47,8 @@ func checkConfigForEmpty(config *Config) (err error) {
 		err = fmt.Errorf("CaptureInterface")
 	} else if config.EncryptionKey == "" {
 		err = fmt.Errorf("EncryptionKey")
-	} else if config.CaptureFilter.DestinationPort == "" {
-		err = fmt.Errorf("DestinationPort")
-	} else if config.CaptureFilter.DestinationIP == "" {
-		err = fmt.Errorf("DestinationIP")
-	} else if config.CaptureFilter.SourcePort == "" {
-		err = fmt.Errorf("SourcePort")
+	} else if config.CaptureFilter.IncludeFilter == "" {
+		err = fmt.Errorf("IncludeFilter")
 	}
 	return
 }
