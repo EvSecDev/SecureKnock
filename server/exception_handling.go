@@ -4,20 +4,33 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
 // Send message to log file and stdout
-// No formatting is done to the stdout message (except newline)
-func log(message string) {
-	// Send to file (if log was specified in config)
-	if logFilePath != "" {
-		err := logToFile(message)
-		logError("failed to create log entry", err, true, false)
+// No formatting is done to the stdout message
+// Message will only print/log if the global verbosity level is equal to or smaller than requiredVerbosityLevel
+// Can directly take variables as values to print just like fmt.Printf
+func log(requiredVerbosityLevel int, message string, vars ...interface{}) {
+	// No output for verbosity level 0
+	if globalVerbosityLevel == 0 {
+		return
 	}
 
-	// Print
-	fmt.Printf("%s\n", message)
+	// Required message verbosity level is equal to or less than global verbosity level
+	if requiredVerbosityLevel <= globalVerbosityLevel {
+		// Send to file (if log was specified in config)
+		if logFilePath != "" {
+			logEntry := strings.TrimSpace(fmt.Sprintf(message, vars...))
+			logEntry = strings.TrimSuffix(logEntry, "\n")
+			err := logToFile(logEntry)
+			logError("failed to create log entry", err, true, false)
+		}
+
+		// Send to stdout
+		fmt.Printf(message, vars...)
+	}
 }
 
 // Log to requested location and exit if requested

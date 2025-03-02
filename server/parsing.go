@@ -35,6 +35,8 @@ func parsePayload(decryptedPayload []byte, actions []map[string][]string) (actio
 		// Get the password after the first occurence of separator
 		sudoPassword = payload[sepIndex+len(payloadSeparator):]
 
+		log(VerbosityDebug, "  Received sudo password '%s' from client\n", sudoPassword)
+
 		// Set action name
 		payload = payload[:sepIndex]
 	}
@@ -42,6 +44,8 @@ func parsePayload(decryptedPayload []byte, actions []map[string][]string) (actio
 	// Ensure received payload text is an authorized action name
 	var payloadAuthorized bool
 	for _, action := range actions {
+		log(VerbosityDebug, "  Validating action '%s' received from client\n", action)
+
 		// Check map key against payload text
 		_, validAction := action[payload]
 		if validAction {

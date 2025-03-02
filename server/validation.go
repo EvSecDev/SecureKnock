@@ -16,15 +16,20 @@ import (
 func checkCapabilities() (err error) {
 	// Only continue if not root
 	if os.Geteuid() == 0 {
+		log(VerbosityProgress, "  Not root, cannot check capabilities\n")
 		return
 	}
 
+	log(VerbosityProgress, "  Retrieving capabilities\n")
+
 	// Get current capabilities
-	caps, err := capability.NewPid(0)
+	caps, err := capability.NewPid2(0)
 	if err != nil {
 		err = fmt.Errorf("failed to retrieve process capabilities: %v", err)
 		return
 	}
+
+	log(VerbosityProgress, "  Checking for 'CAP_NET_RAW' capability\n")
 
 	// Check if program has packet capture capability
 	HasCapNetRaw := caps.Get(capability.PERMITTED, capability.CAP_NET_RAW)
@@ -34,6 +39,8 @@ func checkCapabilities() (err error) {
 		err = fmt.Errorf("executable file needs cap_net_raw when running as non-root user")
 		return
 	}
+
+	log(VerbosityProgress, "  Not running as root, but 'CAP_NET_RAW' is present, clients need to use Sudo password\n")
 
 	// Set global for awareness that program needs a sudo password to perform actions
 	sudoRequired = true
@@ -58,6 +65,8 @@ func checkConfigForEmpty(config *Config) (err error) {
 func validateActionCommands(actions []map[string][]string) (err error) {
 	for _, action := range actions {
 		for name, commands := range action {
+			log(VerbosityFullData, "  Validating action '%s'\n", name)
+
 			// Disallow action names using reserved separator character
 			if strings.Contains(name, payloadSeparator) {
 				err = fmt.Errorf("cannot use '%s' character in action name, it is reserved", payloadSeparator)
@@ -65,6 +74,8 @@ func validateActionCommands(actions []map[string][]string) (err error) {
 			}
 
 			for _, command := range commands {
+				log(VerbosityFullData, "    Validating command: '%s'\n", commands)
+
 				// Split on space to get binary name
 				exeAndArgs := strings.Split(command, " ")
 

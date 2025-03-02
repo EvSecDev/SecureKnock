@@ -24,7 +24,7 @@ function usage {
 
 Options:
   -a <arch>   Architecture of compiled binary (amd64, arm64) [default: amd64]
-  -b <prog>   Which program to build (client, server)
+  -b <prog>   Which program to build (client, server, serverpkg)
   -o <os>     Which operating system to build for (linux, windows) [default: linux]
   -f          Build nicely named binary
 "
@@ -49,7 +49,7 @@ function client_binary {
 	if [[ $3 == true ]]
 	then
 		# Get version
-		version=$(./$outputEXE -v)
+		version=$(./$outputEXE --versionid)
 		clientEXE=""$outputEXE"_"$version"_$GOOS-$GOARCH-static"
 
 		# Rename with version
@@ -81,7 +81,7 @@ function server_package {
 	if [[ $3 == true ]]
 	then
 		# Get version
-		version=$(./$outputEXE -v)
+		version=$(./$outputEXE --versionid)
 		serverPKG=""$outputEXE"_"$version"_$GOOS-$GOARCH-static"
 
 		# Rename with version
@@ -112,7 +112,7 @@ function server_binary {
 	if [[ $3 == true ]]
 	then
 		# Get version
-		version=$(./$outputEXE -v)
+		version=$(./$outputEXE --versionid)
 		serverEXE=""$outputEXE"_"$version"_$GOOS-$GOARCH-dynamic"
 
 		# Rename with version
