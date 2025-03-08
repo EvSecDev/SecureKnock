@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 // If using a password, this asks the user for the password (using the terminal package)
@@ -20,15 +20,19 @@ func createPayloadText(actionName string, usePassword bool) (payloadClearText st
 
 	// Ask for password
 	fmt.Print("Password: ")
-	input, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	input, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Println()
 	if err != nil {
 		err = fmt.Errorf("failed reading password: %v", err)
 		return
 	}
 
+	log(VerbosityTrace, "    Received stdin: %x\n", input)
+
 	// Convert to string
 	sudoPassword := string(input)
+
+	log(VerbosityTrace, "    Received stdin string for password: %s\n", sudoPassword)
 
 	// Reject invalid password characters
 	if !ASCIIRegEx.MatchString(sudoPassword) {
@@ -44,6 +48,8 @@ func createPayloadText(actionName string, usePassword bool) (payloadClearText st
 
 	// Create payload from action name and password
 	payloadClearText = actionName + payloadSeparator + sudoPassword
+
+	log(VerbosityDebug, "    Payload to be sent: %s\n", payloadClearText)
 
 	return
 }

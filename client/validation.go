@@ -12,10 +12,12 @@ import (
 // Resolves domain names, ensures IP is a valid address
 // Joins IP and port, and creates a socket for use with net Dial
 // Does not check if port is destination or source, if destination is empty, it will generate a random destination port
-func validateIPandPort(address string, port int) (socket net.Addr, l4Protocol string, err error) {
+func validateIPandPort(address string, port int, isSource bool) (socket net.Addr, l4Protocol string, err error) {
 	// Generate random port if port is nil (0)
 	// Should only happen for source ports - function is guarded against random destination ports outside function
 	if port == 0 {
+		log(VerbosityProgress, "Generating random port\n")
+
 		// Define port range
 		min := int64(1024)
 		max := int64(65535)
@@ -39,9 +41,15 @@ func validateIPandPort(address string, port int) (socket net.Addr, l4Protocol st
 	}
 
 	// Reject empty IP and port
-	if address == "" {
+	if address == "" && !isSource {
 		err = fmt.Errorf("must specify address")
 		return
+	}
+
+	// Set any source if not specified
+	if address == "" && isSource {
+		log(VerbosityProgress, "Using automatic source IP address\n")
+		address = "::"
 	}
 
 	// Resolve domain name if present, otherwise validate ip
@@ -66,6 +74,8 @@ func validateIPandPort(address string, port int) (socket net.Addr, l4Protocol st
 		err = fmt.Errorf("port must be 1-65535")
 		return
 	}
+
+	log(VerbosityProgress, "Using port %d\n", port)
 
 	// Create destination socket
 	IPPort := net.JoinHostPort(IP.String(), fmt.Sprintf("%d", port))

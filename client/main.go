@@ -23,8 +23,29 @@ const maxPayloadTextSize int = 500
 var ASCIIRegEx *regexp.Regexp
 var HexRegEx *regexp.Regexp
 
+// Integer for printing increasingly detailed information as program progresses
+//
+//	0 - None: quiet (prints nothing but errors)
+//	1 - Standard: normal progress messages
+//	2 - Progress: more progress messages (no actual data outputted)
+//	3 - Data: shows limited data being processed
+//	4 - FullData: shows full data being processed
+//	5 - Debug: shows extra data during processing (raw bytes)
+var globalVerbosityLevel int
+
+// Descriptive Names for available verbosity levels
+const (
+	VerbosityNone int = iota
+	VerbosityStandard
+	VerbosityProgress
+	VerbosityData
+	VerbosityFullData
+	VerbosityDebug
+	VerbosityTrace
+)
+
 // Program Meta Info
-const progVersion string = "v0.2.0"
+const progVersion string = "v0.3.0"
 const usage = `
 Options:
     -k, --keyfile </path/to/keyfile>  Path to the encryption key file [default: priv.key]
@@ -34,10 +55,12 @@ Options:
     -S, --sport <port number>         Send knock packet with source port
     -d, --daddr <domain|IP>           Send knock packet to destination address
     -D, --dport <port number>         Send knock packet to destination port
+    -t, --dry-run                     Test execution without sending anything
         --generate-key                Generate encryption key for use with server or client (requires '--keyfile')
+    -v, --verbose <0...6>             Increase details of program execution (Higher=more verbose) [default: 1]
     -h, --help                        Show this help menu
     -V, --version                     Show version and packages
-    -v, --versionid                   Show only version number
+        --versionid                   Show only version number
 
 Documentation: <https://github.com/EvSecDev/SecureKnock
 `
@@ -51,6 +74,7 @@ func main() {
 	var sourcePort int
 	var destinationAddress string
 	var destinationPort int
+	var dryRun bool
 	var genNewKey bool
 	var versionFlagExists bool
 	var versionNumberFlagExists bool
@@ -70,11 +94,14 @@ func main() {
 	flag.StringVar(&destinationAddress, "daddr", "", "")
 	flag.IntVar(&destinationPort, "D", 0, "")
 	flag.IntVar(&destinationPort, "dport", 0, "")
+	flag.BoolVar(&dryRun, "t", false, "")
+	flag.BoolVar(&dryRun, "dry-run", false, "")
 	flag.BoolVar(&genNewKey, "generate-key", false, "")
 	flag.BoolVar(&versionFlagExists, "V", false, "")
 	flag.BoolVar(&versionFlagExists, "version", false, "")
-	flag.BoolVar(&versionNumberFlagExists, "v", false, "")
 	flag.BoolVar(&versionNumberFlagExists, "versionid", false, "")
+	flag.IntVar(&globalVerbosityLevel, "v", 1, "")
+	flag.IntVar(&globalVerbosityLevel, "verbosity", 1, "")
 
 	// Custom help menu
 	flag.Usage = func() { fmt.Printf("Usage: %s [OPTIONS]...\n%s", os.Args[0], usage) }
@@ -95,20 +122,26 @@ func main() {
 		HexRegEx = regexp.MustCompile(encryptionKeyRegex)
 
 		// Validate source
-		sourceSocket, l4Protocol, err := validateIPandPort(sourceAddress, sourcePort)
+		sourceSocket, _, err := validateIPandPort(sourceAddress, sourcePort, true)
 		logError("invalid source", err)
+
+		log(VerbosityProgress, "Using source socket %s\n", sourceSocket.String())
 
 		// Catch empty destination port
 		if destinationPort == 0 {
 			logError("invalid destination", fmt.Errorf("destination port is not specified"))
 		}
 		// Validate destination
-		destinationSocket, l4Protocol, err := validateIPandPort(destinationAddress, destinationPort)
+		destinationSocket, l4Protocol, err := validateIPandPort(destinationAddress, destinationPort, false)
 		logError("invalid destination", err)
+
+		log(VerbosityProgress, "Using destination socket %s\n", destinationSocket.String())
 
 		// Validate action name
 		err = validateActionName(actionName)
 		logError("invalid action name", err)
+
+		log(VerbosityProgress, "Using action name %s\n", actionName)
 
 		// Prepare encryption
 		AESGCMCipherBlock, TOTPSecret, err := prepareEncryption(keyFile)
@@ -117,6 +150,12 @@ func main() {
 		// Create packet payload text
 		payloadClearText, err := createPayloadText(actionName, usePassword)
 		logError("failed to create text payload", err)
+
+		// Exit if requested dry-run
+		if dryRun {
+			log(VerbosityStandard, "Dry-run requested, all settings are valid. Exiting...\n")
+			return
+		}
 
 		// Send packet
 		err = sendPacket(payloadClearText, AESGCMCipherBlock, TOTPSecret, sourceSocket, destinationSocket, l4Protocol)
