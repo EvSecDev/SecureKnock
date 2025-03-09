@@ -10,7 +10,7 @@ import (
 )
 
 // Starts packet capture and handles data payload processing
-func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AESGCMCipherBlock cipher.AEAD, TOTPSecret []byte, wetRun bool) {
+func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AEAD cipher.AEAD, TOTPSecret []byte, wetRun bool) {
 	// Recover from panic
 	defer func() {
 		if r := recover(); r != nil {
@@ -28,14 +28,14 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AESGCMC
 		log(VerbosityData, "  Using exclusion filter '%s'\n", filter.ExcludeFilter)
 	}
 
-	log(VerbosityData, "  Full BPF: '%s'\n", captureFilter)
+	log(VerbosityData, "Full BPF: '%s'\n", captureFilter)
 
 	// Open packet capture device
 	captureHandle, err := pcap.OpenLive(filter.CaptureInterface, 1600, false, pcap.BlockForever)
 	logError("failed to open capture device", err, true, true)
 	defer captureHandle.Close()
 
-	log(VerbosityProgress, "  Setting BPF on capture handle\n")
+	log(VerbosityProgress, "Setting BPF on capture handle\n")
 
 	// Set filter
 	err = captureHandle.SetBPFFilter(captureFilter)
@@ -66,17 +66,17 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AESGCMC
 			continue
 		}
 
-		log(VerbosityFullData, "  Received packet payload:\n\n%s\n\n", string(payload))
+		log(VerbosityFullData, "  Received packet payload:\n\n%x\n\n", payload)
 
 		// Decrypt payload
 		sessionIV := MutateIVwithTime(TOTPSecret)
-		decryptedPayload, err := AESGCMCipherBlock.Open(nil, sessionIV, payload, nil)
+		decryptedPayload, err := AEAD.Open(nil, sessionIV, payload, nil)
 		if err != nil {
 			logError(fmt.Sprintf("failed decryption of payload from %s:%s", l3meta.Src(), l4meta.Src()), err, false, true)
 			continue
 		}
 
-		log(VerbosityFullData, "  Decrypted packet payload:\n\n%s\n\n", string(decryptedPayload))
+		log(VerbosityFullData, "  Decrypted packet payload:\n\n%x\n\n", decryptedPayload)
 
 		// Parse decrypted payload
 		actionName, commands, sudoPassword, err := parsePayload(decryptedPayload, actions)

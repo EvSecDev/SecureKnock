@@ -48,10 +48,10 @@ ServiceFilePath="$ServiceDir/$Service"
 
 # Setup User
 # Check if user exists on this system (either as user or a group)
-if [[ $(egrep $RunAsUser /etc/passwd 2>/dev/null) ]]
+if [[ $(grep $RunAsUser /etc/passwd 2>/dev/null) ]]
 then
 	:
-elif [[ $(egrep $RunAsUser /etc/group 2>/dev/null) ]]
+elif [[ $(grep $RunAsUser /etc/group 2>/dev/null) ]]
 then
 	:
 else
