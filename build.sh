@@ -1,7 +1,27 @@
 #!/bin/bash
 if [ -z "$BASH_VERSION" ]
 then
-	echo "This script must be run in BASH."
+	echo "This script must be run in BASH." >&2
+	exit 1
+fi
+
+# Define colors - unsupported terminals fail safe
+if [ -t 1 ] && { [[ "$TERM" =~ "xterm" ]] || [[ "$COLORTERM" == "truecolor" ]] || tput setaf 1 &>/dev/null; }
+then
+	readonly RED='\033[31m'
+	readonly GREEN='\033[32m'
+	readonly YELLOW='\033[33m'
+	readonly BLUE='\033[34m'
+	readonly RESET='\033[0m'
+	readonly BOLD='\033[1m'
+fi
+
+readonly configFile="build.conf"
+# shellcheck source=./build.conf
+source "$configFile"
+if [[ $? != 0 ]]
+then
+	echo -e "${RED}[-] ERROR${RESET}: Failed to import build config variables in $configFile" >&2
 	exit 1
 fi
 
@@ -10,167 +30,197 @@ set -e
 
 # Check for required commands
 command -v go >/dev/null
-command -v tar >/dev/null
-command -v base64 >/dev/null
 command -v sha256sum >/dev/null
 
-# Vars
+# Variables
 repoRoot=$(pwd)
-SRCdir="src"
+
+# Check for required external variables
+if [[ -z $HOME ]]
+then
+	echo -e "${RED}[-] ERROR${RESET}: Missing HOME variable" >&2
+	exit 1
+fi
+if [[ -z $repoRoot ]]
+then
+	echo -e "${RED}[-] ERROR${RESET}: Failed to determine current directory" >&2
+	exit 1
+fi
+
+# Load external functions
+while IFS= read -r -d '' helperFunction
+do
+	source "$helperFunction"
+	if [[ $? != 0 ]]
+	then
+		echo -e "${RED}[-] ERROR${RESET}: Failed to import build helper functions" >&2
+		exit 1
+	fi
+done < <(find .build_helpers/ -maxdepth 1 -type f -iname "*.sh" -print0)
+
+##################################
+# MAIN BUILD
+##################################
+
+function compile_program_prechecks() {
+	# Always ensure we start in the root of the repository
+	cd "$repoRoot"/
+
+	# Check for things not supposed to be in a release
+	if type	-t check_for_dev_artifacts &>/dev/null
+	then
+		check_for_dev_artifacts "$SRCdir" "$repoRoot"
+	fi
+
+	# Check for new packages that were imported but not included in version output
+	if type -t update_program_package_imports &>/dev/null
+	then
+		update_program_package_imports "$repoRoot/$SRCdir" "$packagePrintLine"
+	fi
+
+	# Ensure readme has updated code blocks
+	if type -t update_readme &>/dev/null
+	then
+		update_readme "$SRCdir" "$srcHelpMenuStartDelimiter" "$readmeHelpMenuStartDelimiter"
+	fi
+}
+
+function compile_program() {
+	local GOARCH GOOS buildFull replaceDeployedExe deployedBinaryPath buildVersion
+	GOARCH=$1
+	GOOS=$2
+	buildFull=$3
+	replaceDeployedExe=$4
+
+	# Move into dir
+	cd $SRCdir
+
+	# Run tests
+	echo "[*] Running all tests..."
+	go test
+	echo -e "   ${GREEN}[+] DONE${RESET}"
+
+	echo "[*] Compiling program binary..."
+
+	# Vars for build
+	export CGO_ENABLED=0
+	export GOARCH
+	export GOOS
+
+	# Build binary
+	go build -o "$repoRoot"/"$outputEXE" -a -ldflags '-s -w -buildid= -extldflags "-static"' ./*.go
+	cd "$repoRoot"
+
+	# Get version
+	buildVersion=$(./$outputEXE --versionid)
+
+	# Rename to more descriptive if full build was requested
+	if [[ $buildFull == true ]]
+	then
+		local fullNameEXE
+
+		# Rename with version
+		fullNameEXE="${outputEXE}_${buildVersion}_${GOOS}-${GOARCH}-static"
+		mv "$outputEXE" "$fullNameEXE"
+
+		# Create hash for built binary
+		sha256sum "$fullNameEXE" > "$fullNameEXE".sha256
+	elif [[ $replaceDeployedExe == true ]]
+	then
+		# Replace existing binary with new one
+		deployedBinaryPath=$(which $outputEXE)
+		if [[ -z $deployedBinaryPath ]]
+		then
+			echo -e "${RED}[-] ERROR${RESET}: Could not determine path of existing program binary, refusing to continue" >&2
+			rm "$outputEXE"
+			exit 1
+		fi
+
+		mv "$outputEXE" "$deployedBinaryPath"
+	fi
+
+	echo -e "   ${GREEN}[+] DONE${RESET}: Built version ${BOLD}${BLUE}$buildVersion${RESET}"
+}
+
+##################################
+# START
+##################################
 
 function usage {
 	echo "Usage $0
+Program Build Script and Helpers
 
 Options:
-  -a <arch>   Architecture of compiled binary (amd64, arm64) [default: amd64]
-  -b <prog>   Which program to build (exe, pkg)
-  -o <os>     Which operating system to build for (linux, windows) [default: linux]
-  -u          Update go packages for program
-  -f          Build nicely named binary
+  -b           Build the program using defaults
+  -r           Replace binary in path with updated one
+  -a <arch>    Architecture of compiled binary (amd64, arm64) [default: amd64]
+  -o <os>      Which operating system to build for (linux, windows) [default: linux]
+  -u           Update go packages for program
+  -p           Prepare release notes and attachments
+  -P <version> Publish release to github
+  -h           Print this help menu
 "
 }
 
-function check_for_dev_artifacts {
-    # function args
-    SRCdir=$1
-
-    # Quick check for any left over debug prints
-    if grep -ER "DEBUG" $SRCdir/*.go
-    then
-        echo "  [-] Debug print found in source code. You might want to remove that before release."
-    fi
-
-    # Quick staticcheck check - ignoring punctuation in error strings
-    cd $SRCdir
-    set +e
-    staticcheck *.go | egrep -v "error strings should not"
-    set -e
-    cd $repoRoot/
-}
-
-function build {
-	# Always ensure we start in the root of the repository
-    cd $repoRoot/
-
-    # Check for things not supposed to be in a release
-    check_for_dev_artifacts "$SRCdir"
-
-	# Move into dir
-	cd ${repoRoot}/${SRCdir}
-
-    # Run tests
-    go test
-
-	# Vars for build
-	inputGoSource="*.go"
-	outputEXE="secureknock"
-	unset CGO_ENABLED
-	export GOARCH=$1
-	export GOOS=$2
-
-	# Build binary
-	go build -o ${repoRoot}/${outputEXE} -a -ldflags '-s -w -buildid=' $inputGoSource
-	cd $repoRoot
-
-	# Get version and set name if nice naming requested
-	if [[ $3 == true ]]
-	then
-	        # Get version
-                version=$(./$outputEXE --versionid)
-                serverEXE="${outputEXE}_${version}_${GOOS}-${GOARCH}-dynamic"
-	fi
-
-	# Build install package
-	if [[ $4 == true ]]
-	then
-	        tar -cvzf ${outputEXE}.tar.gz ${outputEXE}
-        	cp ${repoRoot}/${SRCdir}/install-secureknock-server.sh ${outputEXE}_install.sh
-	        cat ${outputEXE}.tar.gz | base64 >> ${outputEXE}_install.sh
-		rm ${outputEXE}.tar.gz
-	fi
-
-	# Make nicely named binary if requested
-	if [[ $3 == true ]]
-	then
-		if [[ -f ${outputEXE}_install.sh ]]
-		then
-			# For package naming
-			mv ${outputEXE}_install.sh ${serverEXE}_installer.sh
-			sha256sum ${serverEXE}_installer.sh > ${serverEXE}_installer.sh.sha256
-		else
-			# For single binary
-			mv $outputEXE $serverEXE
-			sha256sum $serverEXE > ${serverEXE}.sha256
-		fi
-	fi
-}
-
-function update_go_packages {
-        # Always ensure we start in the root of the repository
-        cd $repoRoot/
-
-        # Move into src dir
-        cd $SRCdir
-
-        # Run go updates
-        echo "==== Updating Go packages ===="
-        go get -u all
-        go mod verify
-        go mod tidy
-        echo "==== Updates Finished ===="
-}
-
-## START
-# DEFAULT CHOICES
-buildfull='false'
+# DEFAULTS
 architecture="amd64"
 os="linux"
-buildpackage='false'
 
 # Argument parsing
-while getopts 'a:b:o:fh' opt
+while getopts 'a:o:P:buprh' opt
 do
 	case "$opt" in
 	  'a')
 	    architecture="$OPTARG"
 	    ;;
 	  'b')
-	    buildopt="$OPTARG"
+	    buildmode='true'
 	    ;;
-	  'f')
-	    buildfull='true'
-	    ;;
+	  'r')
+        replaceDeployedExe='true'
+        ;;
 	  'o')
 	    os="$OPTARG"
 	    ;;
-        'u')
-        updatepackages='true'
+	  'u')
+	    updatepackages='true'
+	    ;;
+	  'p')
+        prepareRelease='true'
         ;;
+	  'P')
+		publishVersion="$OPTARG"
+		;;
 	  'h')
 	    usage
 	    exit 0
  	    ;;
-          *)
-            usage
-            exit 0
-            ;;
+	  *)
+	    usage
+	    exit 0
+ 	    ;;
 	esac
 done
 
-if [[ $buildopt == pkg ]]
+if [[ $prepareRelease == true ]]
 then
-	buildpackage='true'
-fi
-
-if [[ $updatepackages == true ]]
+	compile_program_prechecks
+	compile_program "$architecture" "$os" 'true' 'false'
+	tempReleaseDir=$(prepare_github_release_files "$fullNameProgramPrefix")
+	create_release_notes "$repoRoot" "$tempReleaseDir"
+elif [[ -n $publishVersion ]]
 then
-    # Using the builtopt cd into the src dir and update packages then exit
-    update_go_packages
-    exit 0
-elif [[ $buildopt == exe ]]
+	create_github_release "$githubUser" "$githubRepoName" "$publishVersion"
+elif [[ $updatepackages == true ]]
 then
-	build "$architecture" "$os" "$buildfull" "$buildpackage"
-	echo "Complete: binary built"
+	update_go_packages "$repoRoot" "$SRCdir"
+elif [[ $buildmode == true ]]
+then
+	compile_program_prechecks
+	compile_program "$architecture" "$os" 'false' "$replaceDeployedExe"
+else
+	echo -e "${RED}ERROR${RESET}: Unknown option or combination of options" >&2
+	exit 1
 fi
 
 exit 0

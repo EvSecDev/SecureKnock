@@ -65,9 +65,10 @@ const (
 )
 
 // Program Meta Info
-const progVersion string = "v0.4.0"
+const progVersion string = "v0.5.0"
 const logProgramName string = "SecurceKnock"
-const usage = `SecureKnock
+const usage = `
+SecureKnock
   Send and receive encrypted UDP packets to perform actions on remote systems
 
 Examples:
@@ -152,7 +153,7 @@ func main() {
 	flag.IntVar(&globalVerbosityLevel, "verbosity", 1, "")
 
 	// Custom help menu
-	flag.Usage = func() { fmt.Printf("Usage: %s [OPTIONS]...\n%s", os.Args[0], usage) }
+	flag.Usage = func() { fmt.Printf("Usage: %s [OPTIONS]...%s", os.Args[0], usage) }
 	flag.Parse()
 
 	// Set regex vars
@@ -162,7 +163,7 @@ func main() {
 	// Program Meta Args
 	if versionFlagExists {
 		fmt.Printf("%s %s compiled using %s(%s) on %s architecture %s\n", logProgramName, progVersion, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
-		fmt.Print("Packages: \n")
+		fmt.Print("Direct Package Imports: runtime github.com/syndtr/gocapability/capability encoding/hex strings golang.org/x/term io encoding/json flag fmt time crypto/rand math/big os/exec net github.com/google/gopacket regexp os crypto/sha256 golang.org/x/crypto/chacha20poly1305 crypto/cipher github.com/google/gopacket/pcap encoding/binary\n")
 	} else if versionNumberFlagExists {
 		fmt.Println(progVersion)
 	} else if startServer {

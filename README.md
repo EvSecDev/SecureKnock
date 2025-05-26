@@ -22,14 +22,18 @@ This is a work-in-progress and may have unintended consequences as development i
 
 ### Help Menu
 
-```sh
-Usage: ./secureknock [OPTIONS]...
+```bash
+  Send and receive encrypted UDP packets to perform actions on remote systems
+
+Examples:
+    secureknock --client -k <secret.key> -S 54321 -d example.com -D 1234 -a startwebserver
+    secureknock --listen -c </etc/skd.json>
 
 Options:
     -l, --listen                      Listen for knock packets via packet capture
     -C, --client                      Send knock packet to remote
     -c, --config </path/to/json>      Path to the configuration file [default: secureknockd.json]
-    -k, --keyfile </path/to/keyfile>  Path to the encryption key file [default: priv.key] (Overrides key value in server config)
+    -k, --keyfile </path/to/keyfile>  Path to the encryption key file (Overrides key value in server config)
     -a, --action <action name>        Send knock packet with specified action name
     -s, --saddr <domain|IP>           Send knock packet with source address
     -S, --sport <port number>         Send knock packet with source port
@@ -44,6 +48,10 @@ Options:
     -h, --help                        Show this help menu
     -V, --version                     Show version and packages
         --versionid                   Show only version number
+
+Report bugs to: dev@evsec.net
+SecureKnock home page: <https://github.com/EvSecDev/SecureKnock>
+General help using GNU software: <https://www.gnu.org/gethelp/>
 ```
 
 Notes:
