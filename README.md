@@ -62,7 +62,7 @@ Notes:
 - `--use-password`: This argument will prompt you for the sudo password of the server's non-root user. This argument does not take the password directly, wait until prompted to enter the password.
 - `--saddr|sport|daddr|dport`: All except `--sport`, `--saddr` are required arguments. Specifying nothing or 0 as `--sport` will use a random number.
 - `--set-caps`: If installing or updating manually, be sure to run this argument as root to ensure executable file has required capability for packet captures as non-root user.
-- `--generate-key`: For ease of use, this is available to create and print a new encryption key, you can always use openssl to generate the 28 byte key.
+- `--generate-key`: For ease of use, this is available to create and print a new encryption key, you can always use openssl to generate the 64 hexadecimal character key.
 - `--install-server`: Easy setup for the daemon.
   - To force installation as root user export variable `runAsRoot` with any value.
   - To setup the unprivileged user password unattended, write the password to stdin (`echo 'mypassword' | secureknock --install-server`)
@@ -72,12 +72,12 @@ Notes:
 
 ```json
 {
-  "logFile": "$DaemonLogFile",
-  "encryptionKey": "$encryptionKey",
+  "logFile": "/tmp/secureknock.log",
+  "encryptionKey": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
   "pcapFilter":
   {
-    "captureInterface": "lo",
-    "inclusionBPF":"",
+    "captureInterface": "eth0",
+    "inclusionBPF":"udp port 12345",
     "exclusionBPF":""
   },
   "actions":
