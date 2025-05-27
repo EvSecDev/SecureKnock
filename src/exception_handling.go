@@ -66,6 +66,8 @@ func logError(errorDescription string, errorMessage error, exitRequested bool, l
 // Creates a log message in config specified log file with entries like /var/log/syslog
 // Example: "2006-01-02T15:04:05.000000-1:00 Hostname SecureKnockd[4252]: message\n"
 func logToFile(message string) (err error) {
+	const logProgramName string = "SecurceKnock"
+
 	// Get the current time
 	currentTime := time.Now()
 

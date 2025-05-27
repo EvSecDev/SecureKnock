@@ -6,8 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
-	"regexp"
 	"runtime"
 )
 
@@ -28,20 +26,14 @@ const payloadSeparator string = ":"
 
 // Min and max byte length for expected payload (assuming 1500 byte mtu)
 const minPayloadLengthB int = 10
-const maxPayloadLengthB int = 1458
-
-// Regex
-const payloadRegex string = "^[\x00-\x7F]*$"
-const encryptionKeyRegex string = "[0-9a-fA-F]+"
+const maxPayloadLengthB int = 500
 
 // Reserved max lengths for action name and password (500 byte/chars for each)
-const maxPayloadTextSize int = 500
+const maxPayloadTextSize int = 249
 
 // Written to only in main
 var logFilePath string
 var sudoRequired bool
-var ASCIIRegEx *regexp.Regexp
-var HexRegEx *regexp.Regexp
 
 // Integer for printing increasingly detailed information as program progresses
 //
@@ -51,23 +43,41 @@ var HexRegEx *regexp.Regexp
 //	3 - Data: shows limited data being processed
 //	4 - FullData: shows full data being processed
 //	5 - Debug: shows extra data during processing (raw bytes)
+//	6 - Trace: shows even more data
 var globalVerbosityLevel int
 
 // Descriptive Names for available verbosity levels
 const (
-	VerbosityNone int = iota
-	VerbosityStandard
-	VerbosityProgress
-	VerbosityData
-	VerbosityFullData
-	VerbosityDebug
-	VerbosityTrace
+	verbosityNone int = iota
+	verbosityStandard
+	verbosityProgress
+	verbosityData
+	verbosityFullData
+	verbosityDebug
+	verbosityTrace
 )
 
-// Program Meta Info
-const progVersion string = "v0.5.0"
-const logProgramName string = "SecurceKnock"
-const usage = `
+func main() {
+	// Program Argument Variables
+	var startServer bool
+	var runClient bool
+	var configFilePath string
+	var keyFile string
+	var actionName string
+	var sourceAddress string
+	var sourcePort int
+	var destinationAddress string
+	var destinationPort int
+	var usePassword bool
+	var dryRun bool
+	var wetRun bool
+	var addCaps bool
+	var genNewKey bool
+	var installRequested bool
+	var versionFlagExists bool
+	var versionNumberFlagExists bool
+
+	const usage = `
 SecureKnock
   Send and receive encrypted UDP packets to perform actions on remote systems
 
@@ -90,6 +100,7 @@ Options:
         --wet-run                     Test dry-run and PCAP validity for server
         --set-caps                    Add PCAP permissions to executable (for running server as non-root user)
         --generate-key                Generate encryption key for use with server or client (save to file with '--keyfile')
+        --install-server              Install server and related components (systemd, apparmor, config)
     -v, --verbose <0...6>             Increase details of program execution (Higher=more verbose) [default: 1]
     -h, --help                        Show this help menu
     -V, --version                     Show version and packages
@@ -99,26 +110,6 @@ Report bugs to: dev@evsec.net
 SecureKnock home page: <https://github.com/EvSecDev/SecureKnock>
 General help using GNU software: <https://www.gnu.org/gethelp/>
 `
-
-func main() {
-	// Program Argument Variables
-	var startServer bool
-	var runClient bool
-	var configFilePath string
-	var keyFile string
-	var actionName string
-	var sourceAddress string
-	var sourcePort int
-	var destinationAddress string
-	var destinationPort int
-	var usePassword bool
-	var dryRun bool
-	var wetRun bool
-	var addCaps bool
-	var genNewKey bool
-	var versionFlagExists bool
-	var versionNumberFlagExists bool
-
 	// Read Program Arguments - allowing both short and long args
 	flag.BoolVar(&startServer, "l", false, "")
 	flag.BoolVar(&startServer, "listen", false, "")
@@ -146,6 +137,7 @@ func main() {
 	flag.BoolVar(&wetRun, "wet-run", false, "")
 	flag.BoolVar(&addCaps, "set-caps", false, "")
 	flag.BoolVar(&genNewKey, "generate-key", false, "")
+	flag.BoolVar(&installRequested, "install-server", false, "")
 	flag.BoolVar(&versionFlagExists, "V", false, "")
 	flag.BoolVar(&versionFlagExists, "version", false, "")
 	flag.BoolVar(&versionNumberFlagExists, "versionid", false, "")
@@ -156,26 +148,24 @@ func main() {
 	flag.Usage = func() { fmt.Printf("Usage: %s [OPTIONS]...%s", os.Args[0], usage) }
 	flag.Parse()
 
-	// Set regex vars
-	ASCIIRegEx = regexp.MustCompile(payloadRegex)
-	HexRegEx = regexp.MustCompile(encryptionKeyRegex)
-
 	// Program Meta Args
+	const progVersion string = "v0.6.0"
 	if versionFlagExists {
-		fmt.Printf("%s %s compiled using %s(%s) on %s architecture %s\n", logProgramName, progVersion, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
-		fmt.Print("Direct Package Imports: runtime github.com/syndtr/gocapability/capability encoding/hex strings golang.org/x/term io encoding/json flag fmt time crypto/rand math/big os/exec net github.com/google/gopacket regexp os crypto/sha256 golang.org/x/crypto/chacha20poly1305 crypto/cipher github.com/google/gopacket/pcap encoding/binary\n")
+		fmt.Printf("secureknock %s compiled using %s(%s) on %s architecture %s\n", progVersion, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
+		fmt.Print("Direct Package Imports: runtime github.com/syndtr/gocapability/capability encoding/hex strings golang.org/x/term strconv io bufio encoding/json flag fmt time crypto/rand math/big os/exec net github.com/google/gopacket os crypto/sha256 golang.org/x/crypto/chacha20poly1305 os/user crypto/cipher path/filepath github.com/google/gopacket/pcap encoding/binary\n")
 	} else if versionNumberFlagExists {
 		fmt.Println(progVersion)
+	} else if installRequested {
+		err := installServerComponents()
+		logError("failed server installation", err, true, true)
 	} else if startServer {
-		log(VerbosityProgress, "Reading config file '%s'\n", configFilePath)
+		log(verbosityProgress, "Reading config file '%s'\n", configFilePath)
 
-		// Grab configuration options from file
 		configFile, err := os.ReadFile(configFilePath)
 		logError("failed to read config file", err, true, false)
 
-		log(VerbosityProgress, "Parsing config file JSON\n")
+		log(verbosityProgress, "Parsing config file JSON\n")
 
-		// Parse json from config file
 		var config Config
 		err = json.Unmarshal(configFile, &config)
 		logError("failed to parse JSON config", err, true, false)
@@ -183,69 +173,54 @@ func main() {
 		// Set file log path (doesn't matter if its empty)
 		logFilePath = config.LogFile
 
-		// Check required capabilities
 		err = checkCapabilities()
 		logError("failed PCAP permission check", err, true, true)
 
-		// Ensure required config fields are present
 		err = checkConfigForEmpty(&config)
 		logError("missing required config fields", err, true, true)
 
-		// Ensure user supplied commands are in path
 		err = validateActionCommands(config.Actions)
 		logError("unable to find commands in config", err, true, true)
 
-		// If running as a test, exit here
 		if dryRun {
-			log(VerbosityStandard, "Dry-run requested, all configuration settings are valid. Exiting...\n")
+			log(verbosityStandard, "Dry-run requested, all configuration settings are valid. Exiting...\n")
 			return
 		}
 
-		// Validate and create cipher with config
 		AEAD, TOTPSecret, err := prepareEncryption(config.EncryptionKey, keyFile)
 		logError("failed to prepare encryption", err, true, true)
 
-		// Start packet capture listener and begin processing captured packets
 		captureAndProcess(config.CaptureFilter, config.Actions, AEAD, TOTPSecret, wetRun)
 	} else if runClient {
-		// Validate source
 		sourceSocket, _, err := validateIPandPort(sourceAddress, sourcePort, true)
 		logError("invalid source", err, true, false)
 
-		// Validate destination
 		destinationSocket, l4Protocol, err := validateIPandPort(destinationAddress, destinationPort, false)
 		logError("invalid destination", err, true, false)
 
-		// Validate action name
 		err = validateActionName(actionName)
 		logError("invalid action name", err, true, false)
 
-		// Prepare encryption
 		AEAD, TOTPSecret, err := prepareEncryption("", keyFile)
 		logError("failed encryption prep", err, true, false)
 
-		// Create packet payload text
 		payloadClearText, err := createPayloadText(actionName, usePassword)
 		logError("failed to create text payload", err, true, false)
 
-		// Exit if requested dry-run
 		if dryRun {
-			log(VerbosityStandard, "Dry-run requested, all settings are valid. Exiting...\n")
+			log(verbosityStandard, "Dry-run requested, all settings are valid. Exiting...\n")
 			return
 		}
 
-		// Send packet
 		err = sendPacket(payloadClearText, AEAD, TOTPSecret, sourceSocket, destinationSocket, l4Protocol)
 		logError("failed to send packet", err, true, false)
 	} else if addCaps {
-		log(VerbosityProgress, "Adding 'cap_net_raw' capability to executable file\n")
-		cmd := exec.Command("setcap", "cap_net_raw=ep", os.Args[0])
-		_, err := cmd.CombinedOutput()
-		logError(fmt.Sprintf("failed to set PCAP capability on executable (%s)", cmd.String()), err, true, false)
+		err := setCapabilities()
+		logError("failed to set capabilities", err, true, true)
 	} else if genNewKey {
 		err := generateNewKey(keyFile)
 		logError("failed to generate new encryption key", err, true, false)
 	} else {
-		fmt.Printf("No arguments specified or incorrect argument combination. Use '-h' or '--help' to guide your way.\n")
+		log(verbosityStandard, "No arguments specified or incorrect argument combination. Use '-h' or '--help' to guide your way.\n")
 	}
 }

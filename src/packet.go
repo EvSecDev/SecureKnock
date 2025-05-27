@@ -10,14 +10,14 @@ import (
 // Encrypts action name and optional password
 // Sends UDP packet to chosen server
 func sendPacket(payloadClearText string, AEAD cipher.AEAD, TOTPSecret []byte, sourceSocket net.Addr, destinationSocket net.Addr, l4Protocol string) (err error) {
-	log(VerbosityProgress, "Opening local socket\n")
+	log(verbosityProgress, "Opening local socket\n")
 
 	// Create a Dialer with the local address
 	dialer := net.Dialer{
 		LocalAddr: sourceSocket,
 	}
 
-	log(VerbosityProgress, "Opening remote socket\n")
+	log(verbosityProgress, "Opening remote socket\n")
 
 	// Open socket to remote
 	socket, err := dialer.Dial(l4Protocol, destinationSocket.String())
@@ -28,14 +28,14 @@ func sendPacket(payloadClearText string, AEAD cipher.AEAD, TOTPSecret []byte, so
 	defer socket.Close()
 
 	// Encrypt the message with time-based IV
-	log(VerbosityProgress, "Waiting for preferred time window to send packet...\n")
+	log(verbosityProgress, "Waiting for preferred time window to send packet...\n")
 	WaitForTimeWindow()
-	log(VerbosityProgress, "Encrypting payload...\n")
+	log(verbosityProgress, "Encrypting payload...\n")
 	sessionIV := MutateIVwithTime(TOTPSecret)
 	CipherText := AEAD.Seal(nil, sessionIV, []byte(payloadClearText), nil)
 
 	// Send the message to the remote host
-	log(VerbosityProgress, "Sending knock packet\n")
+	log(verbosityProgress, "Sending knock packet\n")
 	_, err = socket.Write(CipherText)
 	if err != nil {
 		err = fmt.Errorf("failed to write to socket: %v", err)
@@ -43,6 +43,6 @@ func sendPacket(payloadClearText string, AEAD cipher.AEAD, TOTPSecret []byte, so
 	}
 
 	// Show progress to user
-	log(VerbosityStandard, "Sent knock from %s to %s\n", sourceSocket.String(), destinationSocket)
+	log(verbosityStandard, "Sent knock from %s to %s\n", sourceSocket.String(), destinationSocket)
 	return
 }

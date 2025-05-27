@@ -6,56 +6,15 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/google/gopacket"
-	"github.com/syndtr/gocapability/capability"
 )
-
-// Ensures program when not running as root has cap_net_raw capability
-// Also sets global sudoRequired for bailing early in packet parsing
-func checkCapabilities() (err error) {
-	log(VerbosityProgress, "Checking executable capabilities\n")
-
-	// Only continue if not root
-	if os.Geteuid() == 0 {
-		log(VerbosityProgress, "  Not root, cannot check capabilities\n")
-		return
-	}
-
-	log(VerbosityProgress, "  Retrieving capabilities\n")
-
-	// Get current capabilities
-	caps, err := capability.NewPid2(0)
-	if err != nil {
-		err = fmt.Errorf("failed to retrieve process capabilities: %v", err)
-		return
-	}
-
-	log(VerbosityProgress, "  Checking for 'CAP_NET_RAW' capability\n")
-
-	// Check if program has packet capture capability
-	HasCapNetRaw := caps.Get(capability.PERMITTED, capability.CAP_NET_RAW)
-
-	// Exit if not
-	if !HasCapNetRaw {
-		err = fmt.Errorf("executable file needs cap_net_raw when running as non-root user")
-		return
-	}
-
-	log(VerbosityProgress, "  Not running as root, but 'CAP_NET_RAW' is present, clients need to use Sudo password\n")
-
-	// Set global for awareness that program needs a sudo password to perform actions
-	sudoRequired = true
-
-	return
-}
 
 // Ensure config is not missing required fields
 func checkConfigForEmpty(config *Config) (err error) {
-	log(VerbosityProgress, "Looking for empty config fields that are required\n")
+	log(verbosityProgress, "Looking for empty config fields that are required\n")
 
 	if config.CaptureFilter.CaptureInterface == "" {
 		err = fmt.Errorf("CaptureInterface")
@@ -80,7 +39,7 @@ func validateIPandPort(address string, port int, isSource bool) (socket net.Addr
 	// Generate random port if port is nil (0)
 	// Should only happen for source ports - function is guarded against random destination ports outside function
 	if port == 0 {
-		log(VerbosityProgress, "Generating random port\n")
+		log(verbosityProgress, "Generating random port\n")
 
 		// Define port range
 		min := int64(1024)
@@ -112,7 +71,7 @@ func validateIPandPort(address string, port int, isSource bool) (socket net.Addr
 
 	// Set any source if not specified
 	if address == "" && isSource {
-		log(VerbosityProgress, "Using automatic source IP address\n")
+		log(verbosityProgress, "Using automatic source IP address\n")
 		address = "::"
 	}
 
@@ -139,7 +98,7 @@ func validateIPandPort(address string, port int, isSource bool) (socket net.Addr
 		return
 	}
 
-	log(VerbosityProgress, "Using port %d\n", port)
+	log(verbosityProgress, "Using port %d\n", port)
 
 	// Create destination socket
 	IPPort := net.JoinHostPort(IP.String(), fmt.Sprintf("%d", port))
@@ -154,9 +113,9 @@ func validateIPandPort(address string, port int, isSource bool) (socket net.Addr
 
 	// Show user what whole socket we will be using after resolution
 	if isSource {
-		log(VerbosityProgress, "Using source socket %s\n", socket.String())
+		log(verbosityProgress, "Using source socket %s\n", socket.String())
 	} else if !isSource {
-		log(VerbosityProgress, "Using destination socket %s\n", socket.String())
+		log(verbosityProgress, "Using destination socket %s\n", socket.String())
 	}
 
 	return
@@ -165,11 +124,11 @@ func validateIPandPort(address string, port int, isSource bool) (socket net.Addr
 // Goes through config action commands array to ensure the commands are present in PATH
 // Also validates that they don't have the payload separator character in them
 func validateActionCommands(actions []map[string][]string) (err error) {
-	log(VerbosityProgress, "Validating supplied action commands are in programs PATH\n")
+	log(verbosityProgress, "Validating supplied action commands are in programs PATH\n")
 
 	for _, action := range actions {
 		for name, commands := range action {
-			log(VerbosityFullData, "  Validating action '%s'\n", name)
+			log(verbosityFullData, "  Validating action '%s'\n", name)
 
 			// Disallow action names using reserved separator character
 			if strings.Contains(name, payloadSeparator) {
@@ -178,7 +137,7 @@ func validateActionCommands(actions []map[string][]string) (err error) {
 			}
 
 			for _, command := range commands {
-				log(VerbosityFullData, "    Validating command: '%s'\n", commands)
+				log(verbosityFullData, "    Validating command: '%s'\n", commands)
 
 				// Split on space to get binary name
 				exeAndArgs := strings.Split(command, " ")
@@ -207,31 +166,28 @@ func validateActionCommands(actions []map[string][]string) (err error) {
 //   - does not contain the payload separator character
 //   - does not exceed the maximum allow size to fit in the packet payload
 func validateActionName(actionName string) (err error) {
-	// Ensure input is present
 	if len(actionName) == 0 {
 		err = fmt.Errorf("must not be null")
 		return
 	}
 
-	// Reject invalid action name
-	if !ASCIIRegEx.MatchString(actionName) {
+	if !isPrintableASCII(actionName) {
 		err = fmt.Errorf("must be ASCII text only")
 		return
 	}
 
-	// Reject invalid characters in action name
+	// Reject reserved characters in action name
 	if strings.Contains(actionName, payloadSeparator) {
 		err = fmt.Errorf("must not contain character '%s'", payloadSeparator)
 		return
 	}
 
-	// Reject invalid action name length
 	if len(actionName) >= maxPayloadTextSize {
 		err = fmt.Errorf("must be less than or equal to %d bytes/characters", maxPayloadTextSize)
 		return
 	}
 
-	log(VerbosityProgress, "Using action name %s\n", actionName)
+	log(verbosityProgress, "Using action name %s\n", actionName)
 
 	// Valid
 	return
@@ -271,4 +227,13 @@ func validatePacket(packet gopacket.Packet) (payload []byte, err error) {
 
 	// Packet is valid
 	return
+}
+
+func isPrintableASCII(input string) bool {
+	for i := range len(input) {
+		if input[i] > 127 {
+			return false
+		}
+	}
+	return true
 }

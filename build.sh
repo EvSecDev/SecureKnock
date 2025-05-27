@@ -86,11 +86,12 @@ function compile_program_prechecks() {
 }
 
 function compile_program() {
-	local GOARCH GOOS buildFull replaceDeployedExe deployedBinaryPath buildVersion
+	local GOARCH GOOS buildFull replaceDeployedExe deployedBinaryPath buildVersion staticEnabled
 	GOARCH=$1
 	GOOS=$2
 	buildFull=$3
 	replaceDeployedExe=$4
+	staticEnabled=$5
 
 	# Move into dir
 	cd $SRCdir
@@ -103,12 +104,16 @@ function compile_program() {
 	echo "[*] Compiling program binary..."
 
 	# Vars for build
-	export CGO_ENABLED=0
 	export GOARCH
 	export GOOS
 
 	# Build binary
-	go build -o "$repoRoot"/"$outputEXE" -a -ldflags '-s -w -buildid= -extldflags "-static"' ./*.go
+	if [[ $staticEnabled == true ]]
+	then
+		musl_build_static "$GOARCH" "$GOOS" "$repoRoot" "$outputEXE"
+	else
+		go build -o "$repoRoot"/"$outputEXE" -a -ldflags '-s -w -buildid= ' ./*.go
+	fi
 	cd "$repoRoot"
 
 	# Get version
@@ -156,6 +161,7 @@ Options:
   -a <arch>    Architecture of compiled binary (amd64, arm64) [default: amd64]
   -o <os>      Which operating system to build for (linux, windows) [default: linux]
   -u           Update go packages for program
+  -s           Static build using musl docker
   -p           Prepare release notes and attachments
   -P <version> Publish release to github
   -h           Print this help menu
@@ -167,7 +173,7 @@ architecture="amd64"
 os="linux"
 
 # Argument parsing
-while getopts 'a:o:P:buprh' opt
+while getopts 'a:o:P:busprh' opt
 do
 	case "$opt" in
 	  'a')
@@ -184,6 +190,9 @@ do
 	    ;;
 	  'u')
 	    updatepackages='true'
+	    ;;
+	  's')
+	    buildStatic='true'
 	    ;;
 	  'p')
         prepareRelease='true'
@@ -205,7 +214,7 @@ done
 if [[ $prepareRelease == true ]]
 then
 	compile_program_prechecks
-	compile_program "$architecture" "$os" 'true' 'false'
+	compile_program "$architecture" "$os" 'true' 'false' 'true'
 	tempReleaseDir=$(prepare_github_release_files "$fullNameProgramPrefix")
 	create_release_notes "$repoRoot" "$tempReleaseDir"
 elif [[ -n $publishVersion ]]
@@ -217,7 +226,7 @@ then
 elif [[ $buildmode == true ]]
 then
 	compile_program_prechecks
-	compile_program "$architecture" "$os" 'false' "$replaceDeployedExe"
+	compile_program "$architecture" "$os" 'false' "$replaceDeployedExe" "$buildStatic"
 else
 	echo -e "${RED}ERROR${RESET}: Unknown option or combination of options" >&2
 	exit 1

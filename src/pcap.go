@@ -25,17 +25,17 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AEAD ci
 	if len(filter.ExcludeFilter) > 0 {
 		captureFilter += fmt.Sprintf("(%s) and not (%s)", captureFilter, filter.ExcludeFilter)
 
-		log(VerbosityData, "  Using exclusion filter '%s'\n", filter.ExcludeFilter)
+		log(verbosityData, "  Using exclusion filter '%s'\n", filter.ExcludeFilter)
 	}
 
-	log(VerbosityData, "Full BPF: '%s'\n", captureFilter)
+	log(verbosityData, "Full BPF: '%s'\n", captureFilter)
 
 	// Open packet capture device
 	captureHandle, err := pcap.OpenLive(filter.CaptureInterface, 1600, false, pcap.BlockForever)
 	logError("failed to open capture device", err, true, true)
 	defer captureHandle.Close()
 
-	log(VerbosityProgress, "Setting BPF on capture handle\n")
+	log(verbosityProgress, "Setting BPF on capture handle\n")
 
 	// Set filter
 	err = captureHandle.SetBPFFilter(captureFilter)
@@ -43,12 +43,12 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AEAD ci
 
 	// If testing, exit here
 	if wetRun {
-		log(VerbosityStandard, "Wet-run requested, all configuration and packet capture settings are valid. Exiting...\n")
+		log(verbosityStandard, "Wet-run requested, all configuration and packet capture settings are valid. Exiting...\n")
 		return
 	}
 
 	// Show progress to user
-	log(VerbosityStandard, "Listening for knocks on interface %s\n", filter.CaptureInterface)
+	log(verbosityStandard, "Listening for knocks on interface %s\n", filter.CaptureInterface)
 
 	// Loop over packets captured
 	packetSource := gopacket.NewPacketSource(captureHandle, captureHandle.LinkType())
@@ -57,7 +57,7 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AEAD ci
 		l3meta := packet.NetworkLayer().NetworkFlow()
 		l4meta := packet.TransportLayer().TransportFlow()
 
-		log(VerbosityFullData, "  Received packet from: %s:%s\n", l3meta.Src(), l4meta.Src())
+		log(verbosityFullData, "  Received packet from: %s:%s\n", l3meta.Src(), l4meta.Src())
 
 		// Ensure received packet is within expected bounds
 		payload, err := validatePacket(packet)
@@ -66,7 +66,7 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AEAD ci
 			continue
 		}
 
-		log(VerbosityFullData, "  Received packet payload:\n\n%x\n\n", payload)
+		log(verbosityFullData, "  Received packet payload:\n\n%x\n\n", payload)
 
 		// Decrypt payload
 		sessionIV := MutateIVwithTime(TOTPSecret)
@@ -76,7 +76,7 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AEAD ci
 			continue
 		}
 
-		log(VerbosityFullData, "  Decrypted packet payload:\n\n%x\n\n", decryptedPayload)
+		log(verbosityFullData, "  Decrypted packet payload:\n\n%x\n\n", decryptedPayload)
 
 		// Parse decrypted payload
 		actionName, commands, sudoPassword, err := parsePayload(decryptedPayload, actions)
@@ -86,7 +86,7 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AEAD ci
 		}
 
 		// Log received knock packet
-		log(VerbosityStandard, "Received knock packet (action:%s) from %s:%s\n", actionName, l3meta.Src(), l4meta.Src())
+		log(verbosityStandard, "Received knock packet (action:%s) from %s:%s\n", actionName, l3meta.Src(), l4meta.Src())
 
 		// Run commands for the action
 		err = runCommands(commands, sudoPassword)
@@ -96,6 +96,6 @@ func captureAndProcess(filter PCAPFilter, actions []map[string][]string, AEAD ci
 		}
 
 		// Log action
-		log(VerbosityStandard, "Completed action '%s' issued from %s:%s\n", actionName, l3meta.Src(), l4meta.Src())
+		log(verbosityStandard, "Completed action '%s' issued from %s:%s\n", actionName, l3meta.Src(), l4meta.Src())
 	}
 }

@@ -23,6 +23,7 @@ This is a work-in-progress and may have unintended consequences as development i
 ### Help Menu
 
 ```bash
+SecureKnock
   Send and receive encrypted UDP packets to perform actions on remote systems
 
 Examples:
@@ -44,6 +45,7 @@ Options:
         --wet-run                     Test dry-run and PCAP validity for server
         --set-caps                    Add PCAP permissions to executable (for running server as non-root user)
         --generate-key                Generate encryption key for use with server or client (save to file with '--keyfile')
+        --install-server              Install server and related components (systemd, apparmor, config)
     -v, --verbose <0...6>             Increase details of program execution (Higher=more verbose) [default: 1]
     -h, --help                        Show this help menu
     -V, --version                     Show version and packages
@@ -61,6 +63,10 @@ Notes:
 - `--saddr|sport|daddr|dport`: All except `--sport`, `--saddr` are required arguments. Specifying nothing or 0 as `--sport` will use a random number.
 - `--set-caps`: If installing or updating manually, be sure to run this argument as root to ensure executable file has required capability for packet captures as non-root user.
 - `--generate-key`: For ease of use, this is available to create and print a new encryption key, you can always use openssl to generate the 28 byte key.
+- `--install-server`: Easy setup for the daemon.
+  - To force installation as root user export variable `runAsRoot` with any value.
+  - To setup the unprivileged user password unattended, write the password to stdin (`echo 'mypassword' | secureknock --install-server`)
+  - This can also be used to update the server components. This argument will not overwrite the configuration file, only the other components.
 
 #### JSON Configuration File Example
 

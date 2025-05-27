@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -131,9 +130,6 @@ func TestValidateActionCommands(t *testing.T) {
 }
 
 func TestValidateActionName(t *testing.T) {
-	// mock global
-	ASCIIRegEx = regexp.MustCompile(payloadRegex)
-
 	tests := []struct {
 		name        string
 		actionName  string

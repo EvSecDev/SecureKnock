@@ -9,7 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"regexp"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/chacha20poly1305"
@@ -21,19 +21,11 @@ import (
 // Writes key to supplied key file path
 // Prints key location to user on successful write
 func generateNewKey(keyFilePath string) (err error) {
-	log(VerbosityProgress, "Creating a new random cryptographic key\n")
-
-	// Create a byte slice of the expected length
-	randomBytes := make([]byte, 32)
-
-	// Fill the byte slice with cryptographically secure random data
-	_, err = rand.Read(randomBytes)
+	log(verbosityProgress, "Creating a new random cryptographic key\n")
+	newKey, err := createKeyHex()
 	if err != nil {
 		return
 	}
-
-	// Pretty output - hex representation consumes half the bytes
-	newKey := hex.EncodeToString(randomBytes)
 
 	// Write key to file if given, otherwise print to stdout
 	if keyFilePath != "" {
@@ -61,12 +53,27 @@ func generateNewKey(keyFilePath string) (err error) {
 	return
 }
 
+func createKeyHex() (key string, err error) {
+	// Create a byte slice of the expected length
+	randomBytes := make([]byte, 32)
+
+	// Fill the byte slice with cryptographically secure random data
+	_, err = rand.Read(randomBytes)
+	if err != nil {
+		return
+	}
+
+	// Pretty output - hex representation consumes half the bytes
+	key = hex.EncodeToString(randomBytes)
+	return
+}
+
 // Reads in keyfile and extracts only hex characters from it
 // Validates length is exactly 64 characters
 // Separates into key and TOTP secret
 // Creates the ChaCha20-Poly1305 cipher with the key
 func prepareEncryption(keyAndIV string, keyFile string) (AEAD cipher.AEAD, TOTPSecret []byte, err error) {
-	log(VerbosityProgress, "Creating ChaCha20-Poly1305 Cipher\n")
+	log(verbosityProgress, "Creating ChaCha20-Poly1305 Cipher\n")
 
 	// Extract key from file if file path was supplied
 	if keyFile != "" {
@@ -81,16 +88,38 @@ func prepareEncryption(keyAndIV string, keyFile string) (AEAD cipher.AEAD, TOTPS
 		keyAndIV = string(keyFileBytes)
 	}
 
-	// Extract just hex from key
-	HexRegEx := regexp.MustCompile(`[0-9a-fA-F]+`)
-	key := HexRegEx.FindString(keyAndIV)
+	// Trim misc from key if present
+	keyAndIV = strings.TrimSpace(keyAndIV)
+	keyAndIV = strings.ReplaceAll(keyAndIV, "\n", "")
+	keyAndIV = strings.ReplaceAll(keyAndIV, "\r", "")
+
+	// Validate key length
+	if len(keyAndIV) != 64 {
+		err = fmt.Errorf("invalid encryption key: must be 64 hexadecimal characters")
+		return
+	}
+
+	// Validate key characters
+	var foundInvalidChars bool
+	for index := range len(keyAndIV) {
+		keyChar := keyAndIV[index]
+		if !((keyChar >= '0' && keyChar <= '9') ||
+			(keyChar >= 'a' && keyChar <= 'f') ||
+			(keyChar >= 'A' && keyChar <= 'F')) {
+			foundInvalidChars = true
+		}
+	}
+	if foundInvalidChars {
+		err = fmt.Errorf("invalid encryption key: must be 64 hexadecimal characters")
+		return
+	}
 
 	// Extract IV from key
-	KeyBytes := []byte(key[:32])
-	TOTPSecret = []byte(key[32:])
+	KeyBytes := []byte(keyAndIV[:32])
+	TOTPSecret = []byte(keyAndIV[32:])
 
-	log(VerbosityTrace, "  Using Key (size:%dB): %s\n", len(KeyBytes), string(KeyBytes))
-	log(VerbosityTrace, "  Using IV (size:%dB): %s\n", len(TOTPSecret), string(TOTPSecret))
+	log(verbosityTrace, "  Using Key (size:%dB): %s\n", len(KeyBytes), string(KeyBytes))
+	log(verbosityTrace, "  Using IV (size:%dB): %s\n", len(TOTPSecret), string(TOTPSecret))
 
 	// Reject invalid key length
 	if len(KeyBytes) != 32 {
@@ -98,7 +127,7 @@ func prepareEncryption(keyAndIV string, keyFile string) (AEAD cipher.AEAD, TOTPS
 		return
 	}
 
-	log(VerbosityTrace, "  Key Bytes: %x\n", KeyBytes)
+	log(verbosityTrace, "  Key Bytes: %x\n", KeyBytes)
 
 	// Create a new ChaCha20-Poly1305 instance
 	AEAD, err = chacha20poly1305.New(KeyBytes)
@@ -120,22 +149,22 @@ func MutateIVwithTime(TOTPSecret []byte) (IV []byte) {
 		}
 	}()
 
-	log(VerbosityTrace, "    IVMutation: Using TOTP Secret: %x\n", TOTPSecret)
+	log(verbosityTrace, "    IVMutation: Using TOTP Secret: %x\n", TOTPSecret)
 
 	// Get current time
 	currentUTCTime := time.Now().UTC()
 
-	log(VerbosityTrace, "    IVMutation: current UTC time: %v\n", currentUTCTime)
+	log(verbosityTrace, "    IVMutation: current UTC time: %v\n", currentUTCTime)
 
 	// Get the current second
 	currentSecond := currentUTCTime.Second()
 
-	log(VerbosityTrace, "    IVMutation: current second: %d\n", currentSecond)
+	log(verbosityTrace, "    IVMutation: current second: %d\n", currentSecond)
 
 	// Determine the 15sec block that the current second is in
 	secondBlockTime := (currentSecond / 15) * 15
 
-	log(VerbosityTrace, "    IVMutation: current seconds block: %d\n", secondBlockTime)
+	log(verbosityTrace, "    IVMutation: current seconds block: %d\n", secondBlockTime)
 
 	// 64bit slice for current time in block form
 	currentBlockTime := make([]byte, 8)
@@ -143,22 +172,22 @@ func MutateIVwithTime(TOTPSecret []byte) (IV []byte) {
 	// Create full time block which current time is in
 	binary.BigEndian.PutUint64(currentBlockTime, uint64(currentUTCTime.Unix()-int64(currentSecond)+int64(secondBlockTime)))
 
-	log(VerbosityTrace, "    IVMutation: current full time block bytes: %x\n", currentBlockTime)
+	log(verbosityTrace, "    IVMutation: current full time block bytes: %x\n", currentBlockTime)
 
 	// Add current time block to the shared secret
 	TimeBlockAndSecret := append(currentBlockTime, TOTPSecret...)
 
-	log(VerbosityTrace, "    IVMutation: time block and IV combination: %x\n", TimeBlockAndSecret)
+	log(verbosityTrace, "    IVMutation: time block and IV combination: %x\n", TimeBlockAndSecret)
 
 	// Hash combination of current time block and shared secret
 	TOTP := sha256.Sum256(TimeBlockAndSecret)
 
-	log(VerbosityTrace, "    IVMutation: full time-based one-time password: '%x'\n", TOTP)
+	log(verbosityTrace, "    IVMutation: full time-based one-time password: '%x'\n", TOTP)
 
 	// Return truncated hash for use as the current sessions encryption IV
 	IV = TOTP[:12]
 
-	log(VerbosityTrace, "    IVMutation: Truncated IV to be used with AEAD Cipher: '%x'\n", IV)
+	log(verbosityTrace, "    IVMutation: Truncated IV to be used with AEAD Cipher: '%x'\n", IV)
 
 	return
 }

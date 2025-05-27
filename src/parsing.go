@@ -4,7 +4,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"golang.org/x/term"
@@ -29,15 +28,15 @@ func createPayloadText(actionName string, usePassword bool) (payloadClearText st
 		return
 	}
 
-	log(VerbosityTrace, "    Received stdin: %x\n", input)
+	log(verbosityTrace, "    Received stdin: %x\n", input)
 
 	// Convert to string
 	sudoPassword := string(input)
 
-	log(VerbosityTrace, "    Received stdin string for password: %s\n", sudoPassword)
+	log(verbosityTrace, "    Received stdin string for password: %s\n", sudoPassword)
 
 	// Reject invalid password characters
-	if !ASCIIRegEx.MatchString(sudoPassword) {
+	if !isPrintableASCII(sudoPassword) {
 		err = fmt.Errorf("password must be ASCII text only")
 		return
 	}
@@ -51,7 +50,7 @@ func createPayloadText(actionName string, usePassword bool) (payloadClearText st
 	// Create payload from action name and password
 	payloadClearText = actionName + payloadSeparator + sudoPassword
 
-	log(VerbosityDebug, "    Payload to be sent: %s\n", payloadClearText)
+	log(verbosityDebug, "    Payload to be sent: %s\n", payloadClearText)
 
 	return
 }
@@ -67,13 +66,8 @@ func parsePayload(decryptedPayload []byte, actions []map[string][]string) (actio
 		}
 	}()
 
-	// Convert payload to string
 	payload := string(decryptedPayload)
-
-	// Ensure payload is actual text
-	ASCIIRegEx := regexp.MustCompile(`^[\x00-\x7F]*$`)
-	validText := ASCIIRegEx.MatchString(payload)
-	if !validText {
+	if !isPrintableASCII(payload) {
 		err = fmt.Errorf("packet payload string is not ASCII")
 		return
 	}
@@ -84,7 +78,7 @@ func parsePayload(decryptedPayload []byte, actions []map[string][]string) (actio
 		// Get the password after the first occurence of separator
 		sudoPassword = payload[sepIndex+len(payloadSeparator):]
 
-		log(VerbosityDebug, "  Received sudo password '%s' from client\n", sudoPassword)
+		log(verbosityDebug, "  Received sudo password '%s' from client\n", sudoPassword)
 
 		// Set action name
 		payload = payload[:sepIndex]
@@ -93,7 +87,7 @@ func parsePayload(decryptedPayload []byte, actions []map[string][]string) (actio
 	// Ensure received payload text is an authorized action name
 	var payloadAuthorized bool
 	for _, action := range actions {
-		log(VerbosityDebug, "  Validating action '%s' received from client\n", action)
+		log(verbosityDebug, "  Validating action '%s' received from client\n", action)
 
 		// Check map key against payload text
 		_, validAction := action[payload]
