@@ -3,22 +3,34 @@
 ## Description
 
 This program is designed to run a series of predetermined commands when a particular encrypted packet is received.
-It is supposed to act as a replacement for a traditional port knocking program, except with more confidentiality and integrity.
+This is a replacement for a traditional port knocking program, except with more confidentiality, integrity, and flexibility.
+
+The server does NOT listen on a socket and does not need ANY host-based firewall rule present to receive knocks.
+Knocks are received through packet captures, and as such can be deployed in a passive middle box instead of an endpoint if desired.
 
 For security, the program uses a time mutated IV(Nonce) and ChaCha20-Poly1305 encryption to ensure replay attack protection and confidentiality of the payload.
+The server is supplied with an AppArmor profile and can be run as a non-root user to ensure the maximum level of sandboxing.
 With these security features, there is:
 
 - No need to run complex software exposed directly to the internet all the time, this program can toggle firewall rules or the larger program itself on and off by request of the client.
 - No need for ANY reply traffic from the clients to exist, which means you can turn off any reply-to auto-rules that your firewall/router may apply to the connection.
 - No need to worry about adversaries-in-the-middle. The server is able to authenticate the client and is protected against replay attacks.
 
+To reduce attack surface, source address and source port can be specified to limit the potential visibility to drive-by attackers.
+In the unlikely scenario of a remote code execution vulnerability, the blast radius will be extremely limited.
+
 Some examples of how this program can be deployed:
 
 - Run on a VPN server and when a valid knock is received, start the VPN server service and add an allow firewall rule.
 - Run on a Web server and when a valid knock is received, start the web server service and add an allow firewall rule.
-- Run on a firewall and when a valid knock is seen, add a firewall rule.
+- Run on a firewall and when a valid knock is seen, add/enable a firewall rule.
 
-This is a work-in-progress and may have unintended consequences as development is ongoing. Use at your own risk.
+### Installation
+
+The client is self contained and runs on any Linux/BSD system (no configuration files required).
+
+The server has a built in installer for running on Linux (as a systemd service).
+Use the `--install-server` argument after copying the executable file to the intended server.
 
 ### Help Menu
 
