@@ -26,7 +26,7 @@ func runCommands(commands []string, sudoPassword string) (err error) {
 	// Run authorized commands
 	for _, command := range commands {
 		// If there is a password, prepend to sudo to command
-		if sudoPassword != "" {
+		if sudoPassword != "" && !disableSudo {
 			command = "sudo -S " + command
 		}
 

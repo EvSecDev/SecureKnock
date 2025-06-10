@@ -34,6 +34,7 @@ const maxPayloadTextSize int = 249
 // Written to only in main
 var logFilePath string
 var sudoRequired bool
+var disableSudo bool
 
 // Integer for printing increasingly detailed information as program progresses
 //
@@ -96,6 +97,7 @@ Options:
     -d, --daddr <domain|IP>           Send knock packet to destination address
     -D, --dport <port number>         Send knock packet to destination port
     -p, --use-password                Send knock packet with password for sudo (required if server is not running as root)
+        --disable-sudo                Disables running commands with sudo when server is running as non-root user
         --dry-run                     Test option and environment validity with doing anything
         --wet-run                     Test dry-run and PCAP validity for server
         --set-caps                    Add PCAP permissions to executable (for running server as non-root user)
@@ -131,6 +133,7 @@ General help using GNU software: <https://www.gnu.org/gethelp/>
 	flag.IntVar(&destinationPort, "dport", 0, "")
 	flag.BoolVar(&usePassword, "p", false, "")
 	flag.BoolVar(&usePassword, "use-password", false, "")
+	flag.BoolVar(&disableSudo, "disable-sudo", false, "")
 	flag.BoolVar(&dryRun, "t", false, "")
 	flag.BoolVar(&dryRun, "dry-run", false, "")
 	flag.BoolVar(&wetRun, "T", false, "")
@@ -149,7 +152,7 @@ General help using GNU software: <https://www.gnu.org/gethelp/>
 	flag.Parse()
 
 	// Program Meta Args
-	const progVersion string = "v1.0.0"
+	const progVersion string = "v1.1.0"
 	if versionFlagExists {
 		fmt.Printf("secureknock %s compiled using %s(%s) on %s architecture %s\n", progVersion, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
 		fmt.Print("Direct Package Imports: runtime github.com/syndtr/gocapability/capability encoding/hex strings golang.org/x/term strconv io bufio encoding/json flag fmt time crypto/rand math/big os/exec net github.com/google/gopacket os crypto/sha256 golang.org/x/crypto/chacha20poly1305 os/user crypto/cipher path/filepath github.com/google/gopacket/pcap encoding/binary\n")
