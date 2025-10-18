@@ -2,12 +2,52 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"golang.org/x/term"
 )
+
+// Detect whether stdin is a terminal. If it's not, treat stdin as piped input.
+func readPassword(prompt string) (rawPassword []byte, err error) {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		err = fmt.Errorf("stat stdin: %v", err)
+		return
+	}
+	if stat == nil {
+		err = fmt.Errorf("stdin is null")
+		return
+	}
+
+	// If stdin is not a char device, assume data was piped/redirected.
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		// Read entire stdin and strip trailing newline(s)
+		var data []byte
+		data, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			err = fmt.Errorf("reading piped stdin: %v", err)
+			return
+		}
+		data = bytes.Trim(data, "\n")
+		data = bytes.Trim(data, "\r")
+		rawPassword = data
+		return
+	}
+
+	// stdin is a terminal, prompt user
+	fmt.Print(prompt)
+	bytePw, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
+		err = fmt.Errorf("read password from terminal: %v", err)
+		return
+	}
+	return bytePw, nil
+}
 
 // If using a password, this asks the user for the password (using the terminal package)
 // Validates the password is ASCII and and is below max payload size
@@ -19,10 +59,8 @@ func createPayloadText(actionName string, usePassword bool) (payloadClearText st
 		return
 	}
 
-	// Ask for password
-	fmt.Print("Password: ")
-	input, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Println()
+	// Retrieve password
+	input, err := readPassword("Password: ")
 	if err != nil {
 		err = fmt.Errorf("failed reading password: %v", err)
 		return

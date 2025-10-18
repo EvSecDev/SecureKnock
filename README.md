@@ -53,6 +53,7 @@ Options:
     -d, --daddr <domain|IP>           Send knock packet to destination address
     -D, --dport <port number>         Send knock packet to destination port
     -p, --use-password                Send knock packet with password for sudo (required if server is not running as root)
+        --disable-sudo                Disables running commands with sudo when server is running as non-root user
         --dry-run                     Test option and environment validity with doing anything
         --wet-run                     Test dry-run and PCAP validity for server
         --set-caps                    Add PCAP permissions to executable (for running server as non-root user)
