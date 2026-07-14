@@ -152,7 +152,7 @@ General help using GNU software: <https://www.gnu.org/gethelp/>
 	flag.Parse()
 
 	// Program Meta Args
-	const progVersion string = "v1.2.0"
+	const progVersion string = "v1.2.1"
 	if versionFlagExists {
 		fmt.Printf("secureknock %s compiled using %s(%s) on %s architecture %s\n", progVersion, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
 		fmt.Print("Direct Package Imports: runtime github.com/syndtr/gocapability/capability encoding/hex strings golang.org/x/term strconv io bufio encoding/json flag fmt time crypto/rand math/big os/exec net github.com/google/gopacket os bytes crypto/sha256 golang.org/x/crypto/chacha20poly1305 os/user crypto/cipher path/filepath github.com/google/gopacket/pcap encoding/binary\n")

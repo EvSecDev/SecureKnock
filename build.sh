@@ -1,13 +1,11 @@
 #!/bin/bash
-if [ -z "$BASH_VERSION" ]
-then
+if [ -z "$BASH_VERSION" ]; then
 	echo "This script must be run in BASH." >&2
 	exit 1
 fi
 
 # Define colors - unsupported terminals fail safe
-if [ -t 1 ] && { [[ "$TERM" =~ "xterm" ]] || [[ "$COLORTERM" == "truecolor" ]] || tput setaf 1 &>/dev/null; }
-then
+if [ -t 1 ] && { [[ "$TERM" =~ "xterm" ]] || [[ "$COLORTERM" == "truecolor" ]] || tput setaf 1 &>/dev/null; }; then
 	readonly RED='\033[31m'
 	readonly GREEN='\033[32m'
 	readonly YELLOW='\033[33m'
@@ -19,8 +17,7 @@ fi
 readonly configFile="build.conf"
 # shellcheck source=./build.conf
 source "$configFile"
-if [[ $? != 0 ]]
-then
+if [[ $? != 0 ]]; then
 	echo -e "${RED}[-] ERROR${RESET}: Failed to import build config variables in $configFile" >&2
 	exit 1
 fi
@@ -36,23 +33,19 @@ command -v sha256sum >/dev/null
 repoRoot=$(pwd)
 
 # Check for required external variables
-if [[ -z $HOME ]]
-then
+if [[ -z $HOME ]]; then
 	echo -e "${RED}[-] ERROR${RESET}: Missing HOME variable" >&2
 	exit 1
 fi
-if [[ -z $repoRoot ]]
-then
+if [[ -z $repoRoot ]]; then
 	echo -e "${RED}[-] ERROR${RESET}: Failed to determine current directory" >&2
 	exit 1
 fi
 
 # Load external functions
-while IFS= read -r -d '' helperFunction
-do
+while IFS= read -r -d '' helperFunction; do
 	source "$helperFunction"
-	if [[ $? != 0 ]]
-	then
+	if [[ $? != 0 ]]; then
 		echo -e "${RED}[-] ERROR${RESET}: Failed to import build helper functions" >&2
 		exit 1
 	fi
@@ -67,20 +60,17 @@ function compile_program_prechecks() {
 	cd "$repoRoot"/
 
 	# Check for things not supposed to be in a release
-	if type	-t check_for_dev_artifacts &>/dev/null
-	then
+	if type -t check_for_dev_artifacts &>/dev/null; then
 		check_for_dev_artifacts "$SRCdir" "$repoRoot"
 	fi
 
 	# Check for new packages that were imported but not included in version output
-	if type -t update_program_package_imports &>/dev/null
-	then
+	if type -t update_program_package_imports &>/dev/null; then
 		update_program_package_imports "$repoRoot/$SRCdir" "$packagePrintLine"
 	fi
 
 	# Ensure readme has updated code blocks
-	if type -t update_readme &>/dev/null
-	then
+	if type -t update_readme &>/dev/null; then
 		update_readme "$SRCdir" "$srcHelpMenuStartDelimiter" "$readmeHelpMenuStartDelimiter"
 	fi
 }
@@ -108,8 +98,7 @@ function compile_program() {
 	export GOOS
 
 	# Build binary
-	if [[ $staticEnabled == true ]]
-	then
+	if [[ $staticEnabled == true ]]; then
 		musl_build_static "$GOARCH" "$GOOS" "$repoRoot" "$outputEXE"
 	else
 		go build -o "$repoRoot"/"$outputEXE" -a -ldflags '-s -w -buildid= ' ./*.go
@@ -120,8 +109,7 @@ function compile_program() {
 	buildVersion=$(./$outputEXE --versionid)
 
 	# Rename to more descriptive if full build was requested
-	if [[ $buildFull == true ]]
-	then
+	if [[ $buildFull == true ]]; then
 		local fullNameEXE
 
 		# Rename with version
@@ -129,13 +117,11 @@ function compile_program() {
 		mv "$outputEXE" "$fullNameEXE"
 
 		# Create hash for built binary
-		sha256sum "$fullNameEXE" > "$fullNameEXE".sha256
-	elif [[ $replaceDeployedExe == true ]]
-	then
+		sha256sum "$fullNameEXE" >"$fullNameEXE".sha256
+	elif [[ $replaceDeployedExe == true ]]; then
 		# Replace existing binary with new one
 		deployedBinaryPath=$(which $outputEXE)
-		if [[ -z $deployedBinaryPath ]]
-		then
+		if [[ -z $deployedBinaryPath ]]; then
 			echo -e "${RED}[-] ERROR${RESET}: Could not determine path of existing program binary, refusing to continue" >&2
 			rm "$outputEXE"
 			exit 1
@@ -173,58 +159,53 @@ architecture="amd64"
 os="linux"
 
 # Argument parsing
-while getopts 'a:o:P:busprh' opt
-do
+while getopts 'a:o:P:busprh' opt; do
 	case "$opt" in
-	  'a')
-	    architecture="$OPTARG"
-	    ;;
-	  'b')
-	    buildmode='true'
-	    ;;
-	  'r')
-        replaceDeployedExe='true'
-        ;;
-	  'o')
-	    os="$OPTARG"
-	    ;;
-	  'u')
-	    updatepackages='true'
-	    ;;
-	  's')
-	    buildStatic='true'
-	    ;;
-	  'p')
-        prepareRelease='true'
-        ;;
-	  'P')
-		publishVersion="$OPTARG"
-		;;
-	  'h')
-	    usage
-	    exit 0
- 	    ;;
-	  *)
-	    usage
-	    exit 0
- 	    ;;
+		'a')
+			architecture="$OPTARG"
+			;;
+		'b')
+			buildmode='true'
+			;;
+		'r')
+			replaceDeployedExe='true'
+			;;
+		'o')
+			os="$OPTARG"
+			;;
+		'u')
+			updatepackages='true'
+			;;
+		's')
+			buildStatic='true'
+			;;
+		'p')
+			prepareRelease='true'
+			;;
+		'P')
+			publishVersion="$OPTARG"
+			;;
+		'h')
+			usage
+			exit 0
+			;;
+		*)
+			usage
+			exit 0
+			;;
 	esac
 done
 
-if [[ $prepareRelease == true ]]
-then
+if [[ $prepareRelease == true ]]; then
 	compile_program_prechecks
 	compile_program "$architecture" "$os" 'true' 'false' 'true'
 	tempReleaseDir=$(prepare_github_release_files "$fullNameProgramPrefix")
 	create_release_notes "$repoRoot" "$tempReleaseDir"
-elif [[ -n $publishVersion ]]
-then
+elif [[ -n $publishVersion ]]; then
 	create_github_release "$githubUser" "$githubRepoName" "$publishVersion"
-elif [[ $updatepackages == true ]]
-then
+elif [[ $updatepackages == true ]]; then
 	update_go_packages "$repoRoot" "$SRCdir"
-elif [[ $buildmode == true ]]
-then
+elif [[ $buildmode == true ]]; then
 	compile_program_prechecks
 	compile_program "$architecture" "$os" 'false' "$replaceDeployedExe" "$buildStatic"
 else
